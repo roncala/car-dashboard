@@ -1,0 +1,19 @@
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+RewriteEngine On
+
+# Block direct web access to sensitive folders
+RewriteRule ^app(/|$) - [F,L]
+RewriteRule ^sql(/|$) - [F,L]
+RewriteRule ^logs(/|$) - [F,L]
+
+# uploads: allow later if you need; for now block direct access
+RewriteRule ^uploads(/|$) - [F,L]
+</IfModule>
+
+# Basic hardening
+<FilesMatch "\.(env|ini|log|sql)$">
+  Require all denied
+</FilesMatch>
+
