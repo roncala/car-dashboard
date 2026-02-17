@@ -33,7 +33,7 @@ $base = getenv('APP_BASE_URL') ?: '';
   <link rel="stylesheet" href="<?= $base ?>/assets/css/style.css">
   <link rel="stylesheet" href="<?= $base ?>/assets/css/dashboard.css">
 
-  <script defer src="<?= $base ?>/assets/js/app.js"></script>
+  <script defer src="<?= $base ?>/assets/js/app.js?v=3"></script>
 
   <!-- Chart.js for dashboard charts -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>

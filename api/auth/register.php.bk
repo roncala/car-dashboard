@@ -9,6 +9,7 @@ require_once __DIR__ . '/../../app/validators.php';
 
 start_secure_session();
 
+// Only allow POST
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
   json_response(['error' => 'Method not allowed'], 405);
 }
@@ -18,33 +19,41 @@ require_csrf();
 $pdo  = get_pdo();
 $body = read_json_body();
 
-/** local validators */
+/** Local validators */
 function validate_phone_local(?string $v): ?string {
   $v = str_clean($v, 25);
   if ($v === null) return null;
-  if (!preg_match('/^[0-9+\-\s().]{7,25}$/', $v)) bad_request('Invalid phone format.');
+  if (!preg_match('/^[0-9+\-\s().]{7,25}$/', $v)) {
+    bad_request('Invalid phone format.');
+  }
   return $v;
 }
 function validate_zip_local(?string $v): ?string {
   $v = str_clean($v, 15);
   if ($v === null) return null;
-  if (!preg_match('/^\d{5}(-\d{4})?$/', $v)) bad_request('Invalid ZIP code format.');
+  if (!preg_match('/^\d{5}(-\d{4})?$/', $v)) {
+    bad_request('Invalid ZIP code format.');
+  }
   return $v;
 }
 function validate_state_local(?string $v): ?string {
   $v = str_clean($v, 40);
   if ($v === null) return null;
-  if (!preg_match('/^[A-Za-z]{2}$/', $v)) bad_request('State must be 2 letters (e.g., NJ).');
+  if (!preg_match('/^[A-Za-z]{2}$/', $v)) {
+    bad_request('State must be 2 letters (e.g., NJ).');
+  }
   return strtoupper($v);
 }
 function validate_country_local(?string $v): string {
   $v = str_clean($v, 60);
   if ($v === null) return 'USA';
-  if (!preg_match('/^[A-Za-z][A-Za-z \-]{1,59}$/', $v)) bad_request('Invalid country.');
+  if (!preg_match('/^[A-Za-z][A-Za-z \-]{1,59}$/', $v)) {
+    bad_request('Invalid country.');
+  }
   return $v;
 }
 
-/** required */
+/** Required */
 $full_name = str_clean($body['full_name'] ?? null, 100);
 $email     = validate_email($body['email'] ?? null);
 $password  = $body['password'] ?? null;
@@ -53,7 +62,7 @@ if (!$full_name) bad_request('Full name is required.');
 if (!$email) bad_request('Valid email is required.');
 if (!$password || strlen((string)$password) < 6) bad_request('Password must be at least 6 characters.');
 
-/** optional */
+/** Optional (whitelisted only) */
 $phone         = validate_phone_local($body['phone'] ?? null);
 $address_line1 = str_clean($body['address_line1'] ?? null, 150);
 $address_line2 = str_clean($body['address_line2'] ?? null, 150);
@@ -63,18 +72,18 @@ $zip_code      = validate_zip_local($body['zip_code'] ?? null);
 $country       = validate_country_local($body['country'] ?? null);
 
 try {
-  // prove which DB this PHP process is using
+ // Confirm which DB we're actually connected to
   $dbRow = $pdo->query("SELECT DATABASE() AS db")->fetch();
-  $connectedDb = $dbRow['db'] ?? null;
+  $connectedDb = $dbRow['db'] ?? null;  
 
-  // unique email check (SQL injection safe)
+ // Unique email check (SQL injection safe)
   $stmt = $pdo->prepare("SELECT user_id FROM users WHERE email = ?");
   $stmt->execute([$email]);
   if ($stmt->fetch()) bad_request('Email already in use.');
 
   $hash = password_hash((string)$password, PASSWORD_DEFAULT);
 
-  // insert (SQL injection safe)
+  // Insert (SQL injection safe)
   $stmt = $pdo->prepare("
     INSERT INTO users
       (full_name, email, password_hash, phone,
@@ -83,32 +92,30 @@ try {
       (?, ?, ?, ?,
        ?, ?, ?, ?, ?, ?)
   ");
+
   $stmt->execute([
     $full_name, $email, $hash, $phone,
     $address_line1, $address_line2, $city, $state, $zip_code, $country
   ]);
 
-  $newId = (int)$pdo->lastInsertId();
+	$newId = (int)$pdo->lastInsertId();
 
-  // sanity check: confirm row exists in THIS DB
-  $chk = $pdo->prepare("SELECT user_id, email FROM users WHERE user_id = ?");
+  // Extra sanity check: ensure row exists
+  $chk = $pdo->prepare("SELECT user_id FROM users WHERE user_id = ?");
   $chk->execute([$newId]);
-  $row = $chk->fetch();
-  if (!$row) {
-    throw new RuntimeException("Insert did not persist. Check DB permissions / triggers / schema.");
+  if (!$chk->fetch()) {
+    throw new RuntimeException("Insert did not persist (unexpected).");
   }
-
+  // ✅Do NOT auto-login. Let user go to login page.
   json_response([
     'message' => 'Account created successfully. Please log in.',
+    'user_id' => $newId,
+    'connected_db' => $connectedDb,
     'login_path' => '/public/login.php'
   ], 201);
 
 } catch (Throwable $e) {
   error_log("REGISTER ERROR: " . $e->getMessage());
-  json_response([
-    'error' => 'Register failed.',
-    // keep detail during debugging; remove later
-    'detail' => $e->getMessage()
-  ], 500);
+  json_response(['error' => 'Register failed.'], 500);
 }
 

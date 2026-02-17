@@ -2,32 +2,11 @@
 // app/validators.php
 declare(strict_types=1);
 
-/**
- * Safe string length/substr helpers:
- * - Use mbstring if available (UTF-8 safe)
- * - Fallback to strlen/substr if mbstring is not installed
- */
-function s_len(string $s): int {
-  if (function_exists('mb_strlen')) return (int)mb_strlen($s, 'UTF-8');
-  return (int)strlen($s);
-}
-
-function s_sub(string $s, int $start, int $len): string {
-  if (function_exists('mb_substr')) return (string)mb_substr($s, $start, $len, 'UTF-8');
-  return (string)substr($s, $start, $len);
-}
-
 function str_clean(?string $v, int $maxLen = 1000): ?string {
   if ($v === null) return null;
-
-  // normalize whitespace
-  $v = trim(preg_replace('/\s+/', ' ', $v) ?? '');
+  $v = trim(preg_replace('/\s+/', ' ', $v));
   if ($v === '') return null;
-
-  // enforce max length
-  if (s_len($v) > $maxLen) {
-    $v = s_sub($v, 0, $maxLen);
-  }
+  if (mb_strlen($v) > $maxLen) $v = mb_substr($v, 0, $maxLen);
   return $v;
 }
 
