@@ -1,10 +1,24 @@
 <?php
-// simple redirect wrapper
+declare(strict_types=1);
+
 require_once __DIR__ . '/../app/security.php';
 start_secure_session();
 
-$base = getenv('APP_BASE_URL') ?: '';
-// call API logout then redirect
-header("Location: {$base}/api/auth/logout.php");
+// Clear session array
+$_SESSION = [];
+
+// Clear session cookie
+if (ini_get("session.use_cookies")) {
+  $params = session_get_cookie_params();
+  setcookie(session_name(), '', time() - 42000,
+    $params["path"], $params["domain"], $params["secure"], $params["httponly"]
+  );
+}
+
+// Destroy session
+session_destroy();
+
+// Redirect to login
+header('Location: login.php');
 exit;
 
