@@ -2,6 +2,7 @@
 $pageTitle = "Register";
 $currentPage = "register";
 require_once __DIR__ . '/../partials/header.php';
+#small test
 ?>
 
 <h1>Create Account</h1>
