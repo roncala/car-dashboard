@@ -2,8 +2,6 @@
 $pageTitle = "Dashboard";
 $currentPage = "dashboard";
 require_once __DIR__ . '/../partials/header.php';
-
-$base = getenv('APP_BASE_URL') ?: '';
 ?>
 
 <h1>Dashboard</h1>
@@ -30,7 +28,7 @@ $base = getenv('APP_BASE_URL') ?: '';
   <h3>Browse Cars</h3>
 
   <div class="filters">
-    <input id="q" placeholder="Search company or car name (e.g., Toyota, Civic)">
+    <input id="q" placeholder="Search (company or car name)">
     <select id="fuel">
       <option value="">All fuels</option>
       <option>Petrol</option>
@@ -38,28 +36,14 @@ $base = getenv('APP_BASE_URL') ?: '';
       <option>Hybrid</option>
       <option>Plug-in Hybrid</option>
       <option>Electric</option>
-      <option>Hydrogen</option>
-      <option>CNG</option>
     </select>
-
-    <button id="btnSearch" type="button">Search</button>
-    <button id="btnClear" type="button">Clear</button>
+    <button id="btnSearch">Search</button>
   </div>
 
-  <div class="muted" id="resultsInfo" style="margin-top:10px;"></div>
-
-  <div id="carsTable" style="margin-top:10px;"></div>
-
-  <div class="row" style="margin-top:10px; justify-content:space-between;">
-    <button id="btnPrev" type="button">Prev</button>
-    <div class="muted" id="pageInfo"></div>
-    <button id="btnNext" type="button">Next</button>
-  </div>
+  <div id="carsTable"></div>
 </div>
 
-<!-- Keep your existing stats/charts JS -->
-<script defer src="<?= $base ?>/assets/js/dashboard.js"></script>
-<script defer src="<?= $base ?>/assets/js/browse_cars.js?v=3"></script>
+<script defer src="../assets/js/dashboard.js"></script>
 
 <?php require_once __DIR__ . '/../partials/footer.php'; ?>
 

@@ -2,6 +2,7 @@
 $pageTitle = "Login";
 $currentPage = "login";
 require_once __DIR__ . '/../partials/header.php';
+$base = getenv('APP_BASE_URL') ?: '';
 ?>
 
 <h1>Login</h1>
@@ -10,25 +11,16 @@ require_once __DIR__ . '/../partials/header.php';
   <form id="loginForm">
     <label>Email</label>
     <input name="email" type="email" required>
+
     <label>Password</label>
     <input name="password" type="password" required>
-    <button type="submit">Login</button>
+
+    <button id="btnLogin" type="submit">Login</button>
   </form>
-  <div id="msg"></div>
+
+  <div id="msg" class="muted" style="margin-top:10px;"></div>
 </div>
 
-<script>
-document.getElementById('loginForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const data = Object.fromEntries(new FormData(e.target).entries());
-  try {
-    await apiPost('/api/auth/login.php', data);
-    window.location.href = '../public/index.php';
-  } catch (err) {
-    document.getElementById('msg').textContent = err.message || 'Login failed';
-  }
-});
-</script>
+<script defer src="<?= $base ?>/assets/js/login.js?v=1"></script>
 
 <?php require_once __DIR__ . '/../partials/footer.php'; ?>
-

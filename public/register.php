@@ -2,7 +2,7 @@
 $pageTitle = "Register";
 $currentPage = "register";
 require_once __DIR__ . '/../partials/header.php';
-#small test
+$base = getenv('APP_BASE_URL') ?: '';
 ?>
 
 <h1>Create Account</h1>
@@ -22,12 +22,12 @@ require_once __DIR__ . '/../partials/header.php';
 
       <div>
         <label>Password *</label>
-        <input name="password" id="password" type="password" minlength="6" maxlength="128" required>
+        <input name="password" type="password" minlength="6" maxlength="128" required>
       </div>
 
       <div>
         <label>Confirm Password *</label>
-        <input name="password_confirm" id="password_confirm" type="password" minlength="6" maxlength="128" required>
+        <input name="password_confirm" type="password" minlength="6" maxlength="128" required>
       </div>
 
       <div>
@@ -75,113 +75,12 @@ require_once __DIR__ . '/../partials/header.php';
 
 <div class="card" id="successCard" style="display:none;">
   <h2>Account created ✅</h2>
-  <p class="muted" id="successText">
-    Your account has been created successfully. Please log in to continue.
-  </p>
+  <p class="muted" id="successText">Account created successfully. Please log in.</p>
   <div class="row">
     <a id="loginLink" class="btnLink" href="#">Go to Login</a>
-    <a class="btnLink" href="#" id="createAnother">Create another account</a>
   </div>
 </div>
 
-<style>
-.btnLink{
-  display:inline-block;
-  padding:10px 12px;
-  border-radius:10px;
-  border:1px solid rgba(247,181,0,.35);
-  background:rgba(247,181,0,.12);
-  text-decoration:none;
-}
-.btnLink:hover{background:rgba(247,181,0,.18)}
-</style>
-
-<script>
-(function(){
-  const form = document.getElementById('regForm');
-  const msg = document.getElementById('msg');
-  const btn = document.getElementById('btnCreate');
-
-  const registerCard = document.getElementById('registerCard');
-  const successCard = document.getElementById('successCard');
-  const successText = document.getElementById('successText');
-  const loginLink = document.getElementById('loginLink');
-  const createAnother = document.getElementById('createAnother');
-
-  let submitting = false;
-
-  createAnother.addEventListener('click', (e) => {
-    e.preventDefault();
-    successCard.style.display = 'none';
-    registerCard.style.display = 'block';
-    msg.textContent = '';
-    form.reset();
-    btn.disabled = false;
-    btn.textContent = 'Create Account';
-    submitting = false;
-  });
-
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    if (submitting) return;
-
-    msg.textContent = '';
-
-    const fd = new FormData(form);
-    const data = Object.fromEntries(fd.entries());
-
-    // Required checks
-    if (!data.full_name || !data.full_name.trim()) { msg.textContent = 'Full name is required.'; return; }
-    if (!data.email || !data.email.trim()) { msg.textContent = 'Email is required.'; return; }
-    if (!data.password || data.password.length < 6) { msg.textContent = 'Password must be at least 6 characters.'; return; }
-    if (data.password !== data.password_confirm) { msg.textContent = 'Passwords do not match.'; return; }
-
-    // Optional field format checks
-    if (data.state && !/^[A-Za-z]{2}$/.test(data.state)) { msg.textContent = 'State must be 2 letters (e.g., NJ).'; return; }
-    if (data.zip_code && !/^\d{5}(-\d{4})?$/.test(data.zip_code)) { msg.textContent = 'Zip must be 5 digits (or ZIP+4).'; return; }
-
-    // Do not send confirm password
-    delete data.password_confirm;
-
-    // Remove empty optional fields
-    for (const k of Object.keys(data)) {
-      if (data[k] === '') delete data[k];
-    }
-
-    submitting = true;
-    btn.disabled = true;
-    btn.textContent = 'Creating...';
-
-    try {
-      const res = await apiPost('/api/auth/register.php', data);
-
-      // Build login link using base URL
-      const base = window.APP_BASE_URL || '';
-      const loginPath = (res && res.login_path) ? res.login_path : '/public/login.php';
-      loginLink.href = base + loginPath;
-
-      // If API returns debug info, show it (safe)
-    //  let extra = '';
-    //  if (res && res.user_id) extra += ` (User ID: ${res.user_id})`;
-    //  if (res && res.connected_db) extra += ` — DB: ${res.connected_db}`;
-
-      successText.textContent = (res && res.message ? res.message : 'Account created successfully. Please log in.') + extra;
-
-      registerCard.style.display = 'none';
-      successCard.style.display = 'block';
-
-    } catch (err) {
-      msg.textContent = err && err.message ? err.message : 'Registration failed';
-      submitting = false;
-      btn.disabled = false;
-      btn.textContent = 'Create Account';
-      return;
-    }
-
-    // keep button disabled because we moved to success card
-  });
-})();
-</script>
+<script defer src="<?= $base ?>/assets/js/register.js?v=2"></script>
 
 <?php require_once __DIR__ . '/../partials/footer.php'; ?>
-

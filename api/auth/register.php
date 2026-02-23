@@ -18,7 +18,7 @@ require_csrf();
 $pdo  = get_pdo();
 $body = read_json_body();
 
-/** local validators */
+/** Local validators */
 function validate_phone_local(?string $v): ?string {
   $v = str_clean($v, 25);
   if ($v === null) return null;
@@ -44,7 +44,6 @@ function validate_country_local(?string $v): string {
   return $v;
 }
 
-/** required */
 $full_name = str_clean($body['full_name'] ?? null, 100);
 $email     = validate_email($body['email'] ?? null);
 $password  = $body['password'] ?? null;
@@ -53,7 +52,9 @@ if (!$full_name) bad_request('Full name is required.');
 if (!$email) bad_request('Valid email is required.');
 if (!$password || strlen((string)$password) < 6) bad_request('Password must be at least 6 characters.');
 
-/** optional */
+// Normalize email (prevents duplicates like A@B.com vs a@b.com)
+$email = strtolower($email);
+
 $phone         = validate_phone_local($body['phone'] ?? null);
 $address_line1 = str_clean($body['address_line1'] ?? null, 150);
 $address_line2 = str_clean($body['address_line2'] ?? null, 150);
@@ -62,19 +63,18 @@ $state         = validate_state_local($body['state'] ?? null);
 $zip_code      = validate_zip_local($body['zip_code'] ?? null);
 $country       = validate_country_local($body['country'] ?? null);
 
-try {
-  // prove which DB this PHP process is using
-  $dbRow = $pdo->query("SELECT DATABASE() AS db")->fetch();
-  $connectedDb = $dbRow['db'] ?? null;
+$dupMsg = 'Email already exists. Please use a different email (or log in).';
 
-  // unique email check (SQL injection safe)
-  $stmt = $pdo->prepare("SELECT user_id FROM users WHERE email = ?");
+try {
+  // Friendly pre-check
+  $stmt = $pdo->prepare("SELECT user_id FROM users WHERE email = ? LIMIT 1");
   $stmt->execute([$email]);
-  if ($stmt->fetch()) bad_request('Email already in use.');
+  if ($stmt->fetch()) {
+    json_response(['error' => $dupMsg], 400);
+  }
 
   $hash = password_hash((string)$password, PASSWORD_DEFAULT);
 
-  // insert (SQL injection safe)
   $stmt = $pdo->prepare("
     INSERT INTO users
       (full_name, email, password_hash, phone,
@@ -83,32 +83,26 @@ try {
       (?, ?, ?, ?,
        ?, ?, ?, ?, ?, ?)
   ");
+
   $stmt->execute([
     $full_name, $email, $hash, $phone,
     $address_line1, $address_line2, $city, $state, $zip_code, $country
   ]);
-
-  $newId = (int)$pdo->lastInsertId();
-
-  // sanity check: confirm row exists in THIS DB
-  $chk = $pdo->prepare("SELECT user_id, email FROM users WHERE user_id = ?");
-  $chk->execute([$newId]);
-  $row = $chk->fetch();
-  if (!$row) {
-    throw new RuntimeException("Insert did not persist. Check DB permissions / triggers / schema.");
-  }
 
   json_response([
     'message' => 'Account created successfully. Please log in.',
     'login_path' => '/public/login.php'
   ], 201);
 
+} catch (PDOException $e) {
+  // Duplicate key race condition safety net
+  if (($e->getCode() ?? '') === '23000') {
+    json_response(['error' => $dupMsg], 400);
+  }
+  error_log("REGISTER PDO ERROR: " . $e->getMessage());
+  json_response(['error' => 'Register failed.'], 500);
+
 } catch (Throwable $e) {
   error_log("REGISTER ERROR: " . $e->getMessage());
-  json_response([
-    'error' => 'Register failed.',
-    // keep detail during debugging; remove later
-    'detail' => $e->getMessage()
-  ], 500);
+  json_response(['error' => 'Register failed.'], 500);
 }
-

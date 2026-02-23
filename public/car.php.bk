@@ -1,0 +1,124 @@
+<?php
+$pageTitle = "Car Details";
+$currentPage = "";
+require_once __DIR__ . '/../partials/header.php';
+
+$base = getenv('APP_BASE_URL') ?: '';
+?>
+
+<h1>Car Details</h1>
+
+<div class="card" id="carOut">Loading...</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const base = window.APP_BASE_URL || "<?= $base ?>"; // fallback
+  const carOut = document.getElementById('carOut');
+
+  function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, (m) => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'
+    }[m]));
+  }
+
+  function csrfToken() {
+    const el = document.querySelector('meta[name="csrf-token"]');
+    return el ? el.getAttribute('content') : '';
+  }
+
+  async function fetchJsonStrict(url, options = {}) {
+    const res = await fetch(url, { credentials: 'same-origin', ...options });
+    const ct = (res.headers.get('content-type') || '').toLowerCase();
+    const text = await res.text();
+
+    if (!res.ok) {
+      // try to parse JSON error if present
+      if (ct.includes('application/json')) {
+        try {
+          const data = JSON.parse(text);
+          throw new Error(data.error || `Request failed (${res.status})`);
+        } catch {}
+      }
+      throw new Error(`Request failed (${res.status}): ${text.slice(0, 160)}`);
+    }
+
+    if (!ct.includes('application/json')) {
+      throw new Error(`Expected JSON but got "${ct || 'unknown'}". Response starts: ${text.slice(0, 160)}`);
+    }
+
+    return JSON.parse(text);
+  }
+
+  async function loadCar() {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get('id');
+
+    if (!id) {
+      carOut.textContent = 'Missing car id in URL (expected ?id=123).';
+      return;
+    }
+
+    try {
+      const url = `${base}/api/cars/detail.php?id=${encodeURIComponent(id)}`;
+      const res = await fetchJsonStrict(url);
+      const c = res.car;
+
+      carOut.innerHTML = `
+        <h2>${escapeHtml(c.company_name)} - ${escapeHtml(c.car_name)}</h2>
+        <p class="muted">${escapeHtml(c.engine || '')} • ${escapeHtml(c.fuel_type || '')}</p>
+
+        <div class="grid kpis">
+          <div class="card"><div class="label">Price</div><div class="value">$${Number(c.price || 0).toLocaleString()}</div></div>
+          <div class="card"><div class="label">Horsepower</div><div class="value">${c.horsepower ?? '—'}</div></div>
+          <div class="card"><div class="label">Top Speed</div><div class="value">${c.total_speed ?? '—'} km/h</div></div>
+          <div class="card"><div class="label">0–100</div><div class="value">${c.accel_0_100 ?? '—'} sec</div></div>
+        </div>
+
+        <hr>
+        <p><b>CC/Battery:</b> ${escapeHtml(c.cc_battery_capacity || '')}</p>
+        <p><b>Seats:</b> ${c.seats ?? ''}</p>
+        <p><b>Torque:</b> ${escapeHtml(c.torque || '')}</p>
+
+        <div class="row" style="margin-top:12px;">
+          <button id="btnFav" type="button">Add to Favorites</button>
+        </div>
+
+        <div class="muted" id="favMsg" style="margin-top:10px;"></div>
+      `;
+
+      // Favorites handler (works even if app.js isn't ready)
+      const btnFav = document.getElementById('btnFav');
+      const favMsg = document.getElementById('favMsg');
+
+      btnFav.addEventListener('click', async () => {
+        favMsg.textContent = '';
+        btnFav.disabled = true;
+
+        try {
+          const addUrl = `${base}/api/favorites/add.php`;
+          await fetchJsonStrict(addUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRF-Token': csrfToken()
+            },
+            body: JSON.stringify({ car_id: c.car_id })
+          });
+          favMsg.textContent = 'Added to favorites ✅';
+        } catch (e) {
+          favMsg.textContent = e.message;
+        } finally {
+          btnFav.disabled = false;
+        }
+      });
+
+    } catch (e) {
+      carOut.innerHTML = `<div class="muted">Error: ${escapeHtml(e.message)}</div>`;
+    }
+  }
+
+  loadCar();
+});
+</script>
+
+<?php require_once __DIR__ . '/../partials/footer.php'; ?>

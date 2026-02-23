@@ -1,0 +1,155 @@
+// assets/js/compare.js
+document.addEventListener('DOMContentLoaded', () => {
+  const BASE = window.APP_BASE_URL || '';
+
+  const idsEl = document.getElementById('compareIds');
+  const btnEl = document.getElementById('btnCompare');
+  const outEl = document.getElementById('compareOut');
+
+  if (!idsEl || !btnEl || !outEl) return;
+
+  function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, (m) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+    }[m]));
+  }
+
+  async function fetchJsonStrict(url) {
+    const res = await fetch(url, { credentials: 'same-origin' });
+    const ct = (res.headers.get('content-type') || '').toLowerCase();
+    const text = await res.text();
+
+    if (!res.ok) {
+      if (ct.includes('application/json')) {
+        try {
+          const data = JSON.parse(text);
+          throw new Error(data.error || `Request failed (${res.status})`);
+        } catch {}
+      }
+      throw new Error(`Request failed (${res.status}): ${text.slice(0, 160)}`);
+    }
+
+    if (!ct.includes('application/json')) {
+      throw new Error(`Expected JSON but got "${ct || 'unknown'}". Response starts: ${text.slice(0, 160)}`);
+    }
+
+    return JSON.parse(text);
+  }
+
+  function normalizeIds(raw) {
+    // accept "1,2,3,4" or "1 2 3 4" etc.
+    const parts = String(raw || '')
+      .split(/[^0-9]+/)
+      .map(x => x.trim())
+      .filter(Boolean)
+      .map(x => parseInt(x, 10))
+      .filter(n => Number.isFinite(n) && n > 0);
+
+    // unique + limit 4
+    return Array.from(new Set(parts)).slice(0, 4);
+  }
+
+  function row(label, cars, key, formatter = null) {
+    return `
+      <tr>
+        <td class="muted"><b>${escapeHtml(label)}</b></td>
+        ${cars.map(c => {
+          const val = c[key];
+          const out = formatter ? formatter(val, c) : (val ?? '');
+          return `<td>${escapeHtml(out)}</td>`;
+        }).join('')}
+      </tr>
+    `;
+  }
+
+  function money(v) {
+    if (v === null || v === undefined || v === '') return '';
+    const n = Number(v);
+    if (Number.isNaN(n)) return String(v);
+    return '$' + n.toLocaleString();
+  }
+
+  function speed(v) {
+    if (v === null || v === undefined || v === '') return '';
+    return String(v) + ' km/h';
+  }
+
+  function accel(v) {
+    if (v === null || v === undefined || v === '') return '';
+    return String(v) + ' sec';
+  }
+
+  async function compare() {
+    outEl.innerHTML = '<div class="muted">Loading...</div>';
+
+    const ids = normalizeIds(idsEl.value);
+    if (ids.length < 2) {
+      outEl.innerHTML = '<div class="muted">Enter at least 2 car IDs (max 4), like: 1,2,3,4</div>';
+      return;
+    }
+
+    btnEl.disabled = true;
+
+    try {
+      const url = `${BASE}/api/compare/get.php?ids=${encodeURIComponent(ids.join(','))}`;
+      const res = await fetchJsonStrict(url);
+      const cars = res.cars || [];
+
+      if (!cars.length) {
+        outEl.innerHTML = '<div class="muted">No cars returned.</div>';
+        return;
+      }
+
+      // Build header columns
+      const cols = cars.map(c => `
+        <th>
+          <div>${escapeHtml(c.company_name || '')}</div>
+          <div class="muted">${escapeHtml(c.car_name || '')}</div>
+          <div style="margin-top:6px;">
+            <a class="btnLink" href="${BASE}/public/car.php?id=${c.car_id}">Details</a>
+          </div>
+        </th>
+      `).join('');
+
+      outEl.innerHTML = `
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Spec</th>
+              ${cols}
+            </tr>
+          </thead>
+          <tbody>
+            ${row('Price', cars, 'price', money)}
+            ${row('Fuel Type', cars, 'fuel_type')}
+            ${row('Engine', cars, 'engine')}
+            ${row('CC/Battery', cars, 'cc_battery_capacity')}
+            ${row('Horsepower', cars, 'horsepower')}
+            ${row('Top Speed', cars, 'total_speed', speed)}
+            ${row('0–100', cars, 'accel_0_100', accel)}
+            ${row('Seats', cars, 'seats')}
+            ${row('Torque', cars, 'torque')}
+          </tbody>
+        </table>
+
+        <div class="muted" style="margin-top:10px;">
+          Tip: You can paste IDs like "12, 15, 22, 80" (max 4).
+        </div>
+      `;
+
+    } catch (e) {
+      outEl.innerHTML = `<div class="muted">Error: ${escapeHtml(e.message)}</div>`;
+    } finally {
+      btnEl.disabled = false;
+    }
+  }
+
+  btnEl.addEventListener('click', compare);
+
+  idsEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      compare();
+    }
+  });
+});
