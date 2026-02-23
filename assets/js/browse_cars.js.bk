@@ -1,0 +1,146 @@
+// assets/js/browse_cars.js
+document.addEventListener('DOMContentLoaded', () => {
+ let page = 1;
+ const perPage = 10;
+      
+ const qEl = document.getElementById('q');
+ const fuelEl = document.getElementById('fuel');
+ const btnSearch = document.getElementById('btnSearch');
+ const btnClear = document.getElementById('btnClear');
+ 
+ const carsTable = document.getElementById('carsTable');
+ const resultsInfo = document.getElementById('resultsInfo');
+ const pageInfo = document.getElementById('pageInfo');
+
+ const btnPrev = document.getElementById('btnPrev');
+ const btnNext = document.getElementById('btnNext');
+
+ // If these elements aren't on the page, do nothing
+ if (!qEl || !fuelEl || !btnSearch || !carsTable) return;
+
+ function setLoading(on) {
+ if (on) {
+	 carsTable.innerHTML = '<div class="muted">Loading cars...</div>';
+	 btnSearch.disabled = true;
+	 if (btnPrev) btnPrev.disabled = true;
+	 if (btnNext) btnNext.disabled = true;
+ } else {
+	 btnSearch.disabled = false;
+ }
+ }
+ function renderTable(cars) {
+	 if (!cars || cars.length === 0) {
+		 carsTable.innerHTML = '<div class="muted">No cars found.</div>';
+		 return;
+	 }
+
+	 const base = window.APP_BASE_URL || '';
+
+	 const rows = cars.map(c => `
+			 <tr>
+			 <td>${escapeHtml(c.company_name)}</td>
+			 <td><a href="${base}/public/car.php?id=${c.car_id}">${escapeHtml(c.car_name)}</a></td>
+			 <td>${escapeHtml(c.fuel_type || '')}</td>
+			 <td>${c.price != null ? ('$' + Number(c.price).toLocaleString()) : ''}</td>
+			 <td>${c.horsepower ?? ''}</td>
+			 <td><button type="button" onclick="fav(${c.car_id})">Fav</button></td>
+			 </tr>
+			 `).join('');
+
+	 carsTable.innerHTML = `
+		 <table class="table">
+		 <thead>
+		 <tr>
+		 <th>Company</th>
+		 <th>Car</th>
+		 <th>Fuel</th>
+		 <th>Price</th>
+		 <th>HP</th>
+		 <th>Actions</th>
+		 </tr>
+		 </thead>
+		 <tbody>${rows}</tbody>
+		 </table>
+		 `;
+ }
+
+ async function loadCars() {
+	 setLoading(true);
+
+	 const qs = new URLSearchParams();
+	 const q = qEl.value.trim();
+	 const fuel = fuelEl.value;
+
+	 if (q) qs.set('q', q);              // searches company_name OR car_name
+	 if (fuel) qs.set('fuel', fuel);
+
+	 qs.set('page', String(page));
+	 qs.set('per_page', String(perPage));
+
+	 try {
+		 const res = await apiGet('/api/cars/list.php?' + qs.toString());
+		 renderTable(res.cars);
+
+		 const total = Number(res.total || 0);
+		 const totalPages = Math.max(1, Math.ceil(total / perPage));
+
+		 if (resultsInfo) resultsInfo.textContent = `Showing page ${page} of ${totalPages} — ${total} result(s).`;
+		 if (pageInfo) pageInfo.textContent = `Page ${page} / ${totalPages}`;
+
+		 if (btnPrev) btnPrev.disabled = (page <= 1);
+		 if (btnNext) btnNext.disabled = (page >= totalPages);
+
+	 } catch (e) {
+		 carsTable.innerHTML = `<div class="muted">Error: ${escapeHtml(e.message)}</div>`;
+		 if (resultsInfo) resultsInfo.textContent = '';
+		 if (pageInfo) pageInfo.textContent = '';
+	 } finally {
+		 btnSearch.disabled = false;
+	 }
+ }
+
+ btnSearch.addEventListener('click', () => { page = 1; loadCars(); });
+
+ if (btnClear) {
+	 btnClear.addEventListener('click', () => {
+			 qEl.value = '';
+			 fuelEl.value = '';
+			 page = 1;
+			 loadCars();
+			 });
+ }
+
+ qEl.addEventListener('keydown', (e) => {
+		 if (e.key === 'Enter') {
+		 e.preventDefault();
+		 page = 1;
+		 loadCars();
+		 }
+		 });
+
+ if (btnPrev) {
+	 btnPrev.addEventListener('click', () => {
+			 if (page > 1) { page--; loadCars(); }
+			 });
+ }
+
+ if (btnNext) {
+	 btnNext.addEventListener('click', () => {
+			 page++; loadCars();
+			 });
+ }
+
+ // Global favorite handler
+ window.fav = async function (carId) {
+	 try {
+		 await apiPost('/api/favorites/add.php', { car_id: carId });
+		 alert('Added to favorites');
+	 } catch (e) {
+		 alert(e.message);
+	 }
+ };
+
+ // Initial load
+ loadCars();
+});
+
